@@ -228,17 +228,45 @@ __builtins__.input = input`);
 		}, 60000);
 
 		pyodideWorker.onmessage = (event) => {
-			console.log('pyodideWorker.onmessage', event);
-			const { id, ...data } = event.data;
-
-			console.log(id, data);
-
-			data['stdout'] && (stdout = data['stdout']);
-			data['stderr'] && (stderr = data['stderr']);
-			data['result'] && (result = data['result']);
-
-			executing = false;
-		};
+    console.log('pyodideWorker.onmessage', event);
+    const { id, ...data } = event.data;
+    console.log(id, data);
+    
+    // Überprüfen ob result ein PDF ist
+    if (data.result && typeof data.result === 'string') {
+        try {
+            const pdfData = JSON.parse(data.result);
+            if (pdfData.type === 'pdf') {
+                // Base64-String in Blob umwandeln
+                const binaryData = atob(pdfData.data);
+                const bytes = new Uint8Array(binaryData.length);
+                for (let i = 0; i < binaryData.length; i++) {
+                    bytes[i] = binaryData.charCodeAt(i);
+                }
+                const blob = new Blob([bytes], { type: 'application/pdf' });
+                
+                // Download initiieren
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = pdfData.filename;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+                
+                console.log('PDF-Download initiiert');
+            }
+        } catch (e) {
+            console.log('Kein PDF-Result:', e);
+        }
+    }
+    
+    data['stdout'] && (stdout = data['stdout']);
+    data['stderr'] && (stderr = data['stderr']);
+    data['result'] && (result = data['result']);
+    executing = false;
+};
 
 		pyodideWorker.onerror = (event) => {
 			console.log('pyodideWorker.onerror', event);

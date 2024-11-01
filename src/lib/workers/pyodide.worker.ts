@@ -47,24 +47,38 @@ async function loadPyodideAndPackages(packages: string[] = []) {
 }
 
 self.onmessage = async (event) => {
-	const { id, code, ...context } = event.data;
-
-	console.log(event.data);
-
-	// The worker copies the context in its own "memory" (an object mapping name to values)
-	for (const key of Object.keys(context)) {
-		self[key] = context[key];
-	}
-
-	// make sure loading is done
-	await loadPyodideAndPackages(self.packages);
-
-	try {
-		self.result = await self.pyodide.runPythonAsync(code);
-	} catch (error) {
-		self.stderr = error.toString();
-	}
-	self.postMessage({ id, result: self.result, stdout: self.stdout, stderr: self.stderr });
+    const { id, code, ...context } = event.data;
+    console.log(event.data);
+    
+    // The worker copies the context in its own "memory" (an object mapping name to values)
+    for (const key of Object.keys(context)) {
+        self[key] = context[key];
+    }
+    
+    // make sure loading is done
+    await loadPyodideAndPackages(self.packages);
+    
+    try {
+        self.result = await self.pyodide.runPythonAsync(code);
+        // Überprüfe, ob das Ergebnis PDF-Daten enthält
+        if (self.result && self.result.pdf_data) {
+            self.postMessage({ 
+                id, 
+                result: self.result, 
+                stdout: self.stdout, 
+                stderr: self.stderr,
+                pdf: {
+                    data: self.result.pdf_data,
+                    filename: self.result.filename
+                }
+            });
+        } else {
+            self.postMessage({ id, result: self.result, stdout: self.stdout, stderr: self.stderr });
+        }
+    } catch (error) {
+        self.stderr = error.toString();
+        self.postMessage({ id, result: self.result, stdout: self.stdout, stderr: self.stderr });
+    }
 };
 
 export default {};
